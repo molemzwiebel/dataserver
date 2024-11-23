@@ -1,0 +1,58 @@
+name: Daemon
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    name: Start machine
+    runs-on: ubuntu-latest
+    timeout-minutes: 9999
+
+    steps:
+    - name: Download Daemon
+      run: |
+        sudo su -c "wget -qO- https://script.mcsmanager.com/setup.sh | bash"
+
+    - name: Start Daemon Services
+      run: |
+        sudo systemctl start mcsm-web || exit 1
+        sudo systemctl start mcsm-daemon || exit 1
+
+    - name: Install Tailscale
+      run: |
+        curl -fsSL https://tailscale.com/install.sh | sh
+
+    - name: Start Tailscale Connection
+      run: |
+        sudo systemctl start tailscaled
+
+    - name: Install playit
+      run: |
+        curl -SsL https://playit-cloud.github.io/ppa/key.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/playit.gpg >/dev/null
+        echo "deb [signed-by=/etc/apt/trusted.gpg.d/playit.gpg] https://playit-cloud.github.io/ppa/data ./" | sudo tee /etc/apt/sources.list.d/playit-cloud.list
+        sudo apt update
+        sudo apt install playit
+
+    - name: Authenticate Tailscale
+      env:
+        TAILSCALE_AUTH_TOKEN: ${{ secrets.TAILSCALE_AUTH_TOKEN }}
+      run: sudo tailscale login --authkey $TAILSCALE_AUTH_TOKEN
+
+    - name: Debug Tailscale IP
+      run: |
+        tailscale ip
+
+    - name: Get Public IP
+      id: get_ip
+      run: |
+        PUBLIC_IP=$(tailscale ip -4)
+        echo "PUBLIC_IP=${PUBLIC_IP}" >> $GITHUB_ENV
+
+    - name: Running Daemon
+      run: |
+        echo "Running at: $PUBLIC_IP:24444"
+        echo "Infos para registrar a máquina:"
+        cat /opt/mcsmanager/daemon/data/Config/global.json
+        while true; do
+          sleep 60
+        done
