@@ -1,0 +1,48 @@
+name: Windows
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    name: Start Building...
+    runs-on: windows-latest
+    timeout-minutes: 9999
+
+    steps:
+    
+      - name: Download & install Tailscale
+        run: |
+          $url = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
+          Invoke-WebRequest $url -OutFile tailscale-setup.exe
+          Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/S" -Wait
+          Start-Sleep -Seconds 30
+
+      - name: Authenticate Tailscale
+        env:
+          TAILSCALE_AUTH_TOKEN: ${{ secrets.TAILSCALE_AUTH_TOKEN }}
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" login --authkey $Env:TAILSCALE_AUTH_TOKEN
+
+      - name: Enable Remote Desktop
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "User Authentication" -Value 1
+
+      - name: Set RDP User Password
+        run: Set-LocalUser  -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText $Env:RDP_PASSWORD -Force)
+        env:
+          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+
+      - name: Get Tailscale IP and Print Credentials
+        run: |
+          $tailscaleIP = & "C:\Program Files\Tailscale\tailscale.exe" ip
+          Write-Host "( Tailscale IP: $tailscaleIP )"
+          Write-Host "( Usuário: runneradmin )"
+          Write-Host "( Senha: P@ssw0rd! )"
+
+      - name: Running
+        run: |
+          while ($true) {
+            Start-Sleep -Seconds 5
+          }
